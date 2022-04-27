@@ -43,30 +43,7 @@
 #include "esp_crc.h"
 
 
-// MAC Address of MowJoe central processor
-//uint8_t broadcastAddress[] = {0xC4, 0x4F, 0x33, 0x3E, 0xC5, 0xF1};  //Standalone ESP32 test master
-//uint8_t broadcastAddress[] = {0xC4,0x4F,0x33,0x3E,0xE8,0x25};  //Mowjoe_Master - Test2 - not yet final
-uint8_t broadcastAddress[] = {0x24,0x0a,0xc4,0xe8,0x2b,0x04};  //Mowjoe_Master - with external WiFi antenna
 
-
-//-- Sensor typedefs
-#define ACCEL  1
-#define MAG   2
-
-#define EEADDR 98 //66 // Start location to write EEPROM data.
-#define EEADDR 98 //66 // Start location to write EEPROM data.
-#define CALTIME 10000  // In ms.
-#define SMOOTH_ACCELL 20
-
-//ESP32 Default I2C pins
-#define I2C_SDA 21
-#define I2C_SCL 22
-#define MAGNO_RDY_PIN 19
-
-//Status LEDs
-#define RED_LED_PIN		17
-#define GREEN_LED_PIN	18
-#define BLUE_LED_PIN	19
 
 enum Commands{START,STOP,REPEAT,FREQ,REQUIRE_ACK};
 
@@ -109,20 +86,6 @@ float incomingPres;
 // Variable to store if sending data was successful
 String success;
 
-//Structure example to send data
-//Must match the receiver structure
-typedef struct struct_message {
-	char command[ESPNOW_MAX_COMMAND_LEN];
-    float temp;
-    float bearing;
-    float heading;
-} struct_message;
-
-// Create a struct_message called outgoingReadings to hold sensor readings
-struct_message outgoingReadings;
-
-// Create a struct_message to hold incoming sensor readings
-struct_message incomingReadings;
 
 
 void displaySensorDetails(int type) {
@@ -167,11 +130,9 @@ int parse_command(char* cmd_sent)
   int i = 0;
   int j = 0;
   char delimiters[] = "=:,";
-//  char *token;
+  char *token;
   int ret_val = 0;
 
-
-  char* token;
   char* rest = cmd_sent;
   enum Commands command;
 
@@ -274,17 +235,31 @@ void setup() {
   // get the status of Trasnmitted packet
   esp_now_register_send_cb(OnDataSent);
   
-  // Register peer
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  // Register peer1
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);		//MowJoe_Master
+//  memcpy(peerInfo.peer_addr, broadcastAddress2, 6);		//MowJoe_MotorController
   peerInfo.channel = 1;  
   peerInfo.encrypt = false;
   
   // Add peer        
   if (esp_now_add_peer(&peerInfo) != ESP_OK){
-    Serial.println("Failed to add peer");
+    Serial.println("Failed to add peer1");
     digitalWrite(RED_LED_PIN, HIGH);
     return;
   }
+
+  // Register peer2
+  memcpy(peerInfo.peer_addr, broadcastAddress2, 6);		//MowJoe_MotorController
+  peerInfo.channel = 1;
+  peerInfo.encrypt = false;
+
+  // Add peer
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer2");
+    digitalWrite(RED_LED_PIN, HIGH);
+    return;
+  }
+
   // Register for a callback function that will be called when data is received
   esp_now_register_recv_cb(OnDataRecv);
 
@@ -387,22 +362,34 @@ void compass_task(void *arg) {
               _position = nearbyint(temp_pos);  // Remove the decimal degrees (rounded out)
               Input = _position;//'Input comes out of the filter_heading() filter and goes to the PID
 
-            Serial.printf("Heading: %lf\n\r", Input);
+            Serial.printf("Magno: %lf\n\r", Input);
 
             // Send message via ESP-NOW
+            outgoingReadings.sensorID = MOWJOE_MAGNO;
             outgoingReadings.temp = headingDegrees;
             outgoingReadings.bearing = temp_pos;
             outgoingReadings.heading = Input;
-
-
-//            Serial.printf("outgoingReadings.pres: %lf\n\r", outgoingReadings.heading);
 
             if(ok_to_Send == true) {
                 digitalWrite(RED_LED_PIN, LOW);
                 digitalWrite(BLUE_LED_PIN, LOW);
                 digitalWrite(GREEN_LED_PIN, HIGH);
 
-            	esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &outgoingReadings, sizeof(outgoingReadings));
+            	esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &outgoingReadings, sizeof(outgoingReadings));		//Send to MowJoe_Master
+            	if (result == ESP_OK) {
+            	  Serial.println("Sent with success");
+            	}
+            	else {
+            	  Serial.println("Error sending the data");
+            	}
+            	esp_err_t result2 = esp_now_send(broadcastAddress2, (uint8_t *) &outgoingReadings, sizeof(outgoingReadings));	//Send to MowJoe_MotorControl
+            	if (result2 == ESP_OK) {
+            	  Serial.println("Sent with success");
+            	}
+            	else {
+            	  Serial.println("Error sending the data");
+            	}
+
             	Serial.printf("SENT -> outgoingReadings.heading: %lf\n\r", outgoingReadings.heading);
             } else {
                 digitalWrite(RED_LED_PIN, HIGH);
