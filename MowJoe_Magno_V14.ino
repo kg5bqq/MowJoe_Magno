@@ -16,10 +16,8 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
-//#include <Adafruit_ADXL345_U.h>
 #include <tgmath.h>
 #include <RunningMedian.h>
-
 
 #include <stdlib.h>
 #include <time.h>
@@ -159,12 +157,7 @@ int parse_command(char* cmd_sent)
 	   start_sending = false;
    }
 
-
-
-
-////
-////   ret_val = validate_command();
-   return ret_val;
+return ret_val;
 
 }
 
@@ -179,12 +172,6 @@ int parse_command(char* cmd_sent)
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   Serial.print("\r\nLast Packet Send Status:\t");
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-//  if (status ==0){
-//    success = "Delivery Success :)";
-//  }
-//  else{
-//    success = "Delivery Fail :(";
-//  }
 }
 
 // Callback when data is received
@@ -192,8 +179,6 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
   Serial.print("Bytes received: ");
   Serial.println(len);
-  //Clear out any previous message/data
-  //memset(incomingCommand,0,sizeof(incomingCommand));
   //Now copy in the latest..
   memcpy(incomingCommand,incomingReadings.command,sizeof(incomingCommand));
 
@@ -284,25 +269,6 @@ void setup() {
  
 void loop() {
 }
-
-void updateDisplay(){
-  // Display Readings in Serial Monitor
-//  Serial.printf("THIS UNIT[WIFI] channel %d, MAC: %s RSSI: %d, \n\r", WiFi.channel(),WiFi.macAddress().c_str(), WiFi.RSSI());
-	digitalWrite(BLUE_LED_PIN, HIGH);
-	digitalWrite(RED_LED_PIN, LOW);
-  Serial.println("INCOMING READINGS");
-  Serial.print("Command: ");
-  Serial.println(incomingCommand);
-  digitalWrite(BLUE_LED_PIN, LOW);
-//  Serial.print("Heading: ");
-//  Serial.println(incomingReadings.temp);
-//  Serial.print("Heading: ");
-//  Serial.println(incomingReadings.hum);
-//  Serial.print("Heading: ");
-//  Serial.println(incomingReadings.pres);
-//  Serial.println();
-}
-
 
 
 void compass_task(void *arg) {
