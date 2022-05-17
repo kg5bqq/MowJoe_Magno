@@ -348,7 +348,12 @@ void compass_task(void *arg) {
             	}
             	else {
             	  Serial.println("Error sending the data");
+                  digitalWrite(RED_LED_PIN, HIGH);
+                  digitalWrite(BLUE_LED_PIN, LOW);
+                  digitalWrite(GREEN_LED_PIN, LOW);
             	}
+
+/*
             	esp_err_t result2 = esp_now_send(broadcastAddress2, (uint8_t *) &outgoingReadings, sizeof(outgoingReadings));	//Send to MowJoe_MotorControl
             	if (result2 == ESP_OK) {
             	  Serial.println("Sent with success");
@@ -356,11 +361,12 @@ void compass_task(void *arg) {
             	else {
             	  Serial.println("Error sending the data");
             	}
+*/
 
             	Serial.printf("SENT -> outgoingReadings.heading: %lf\n\r", outgoingReadings.heading);
             } else {
-                digitalWrite(RED_LED_PIN, HIGH);
-                digitalWrite(BLUE_LED_PIN, LOW);
+                digitalWrite(RED_LED_PIN, LOW);
+                digitalWrite(BLUE_LED_PIN, HIGH);
                 digitalWrite(GREEN_LED_PIN, LOW);
             }
 
