@@ -16,10 +16,8 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
-//#include <Adafruit_ADXL345_U.h>
 #include <tgmath.h>
 #include <RunningMedian.h>
-
 
 #include <stdlib.h>
 #include <time.h>
@@ -42,24 +40,6 @@
 #include "esp_now.h"
 #include "esp_crc.h"
 
-
-// MAC Address of MowJoe central processor
-//uint8_t broadcastAddress[] = {0xC4, 0x4F, 0x33, 0x3E, 0xC5, 0xF1};  //Standalone ESP32 test master
-uint8_t broadcastAddress[] = {0xC4,0x4F,0x33,0x3E,0xE8,0x25};  //Mowjoe_Master - Test2 - not yet final
-
-//-- Sensor typedefs
-#define ACCEL  1
-#define MAG   2
-
-#define EEADDR 98 //66 // Start location to write EEPROM data.
-#define EEADDR 98 //66 // Start location to write EEPROM data.
-#define CALTIME 10000  // In ms.
-#define SMOOTH_ACCELL 20
-
-//ESP32 Default I2C pins
-#define I2C_SDA 21
-#define I2C_SCL 22
-#define MAGNO_RDY_PIN 19
 
 
 
@@ -104,20 +84,6 @@ float incomingPres;
 // Variable to store if sending data was successful
 String success;
 
-//Structure example to send data
-//Must match the receiver structure
-typedef struct struct_message {
-	char command[ESPNOW_MAX_COMMAND_LEN];
-    float temp;
-    float bearing;
-    float heading;
-} struct_message;
-
-// Create a struct_message called outgoingReadings to hold sensor readings
-struct_message outgoingReadings;
-
-// Create a struct_message to hold incoming sensor readings
-struct_message incomingReadings;
 
 
 void displaySensorDetails(int type) {
@@ -162,11 +128,9 @@ int parse_command(char* cmd_sent)
   int i = 0;
   int j = 0;
   char delimiters[] = "=:,";
-//  char *token;
+  char *token;
   int ret_val = 0;
 
-
-  char* token;
   char* rest = cmd_sent;
   enum Commands command;
 
@@ -193,12 +157,7 @@ int parse_command(char* cmd_sent)
 	   start_sending = false;
    }
 
-
-
-
-////
-////   ret_val = validate_command();
-   return ret_val;
+return ret_val;
 
 }
 
@@ -213,12 +172,6 @@ int parse_command(char* cmd_sent)
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   Serial.print("\r\nLast Packet Send Status:\t");
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-//  if (status ==0){
-//    success = "Delivery Success :)";
-//  }
-//  else{
-//    success = "Delivery Fail :(";
-//  }
 }
 
 // Callback when data is received
@@ -226,8 +179,6 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
   Serial.print("Bytes received: ");
   Serial.println(len);
-  //Clear out any previous message/data
-  //memset(incomingCommand,0,sizeof(incomingCommand));
   //Now copy in the latest..
   memcpy(incomingCommand,incomingReadings.command,sizeof(incomingCommand));
 
@@ -244,15 +195,25 @@ esp_now_peer_info_t peerInfo;
 
 void setup() {
   // Init Serial Monitor
+
+	pinMode(RED_LED_PIN, OUTPUT);
+	pinMode(GREEN_LED_PIN, OUTPUT);
+	pinMode(BLUE_LED_PIN, OUTPUT);
+	digitalWrite(RED_LED_PIN, LOW);
+	digitalWrite(GREEN_LED_PIN, LOW);
+	digitalWrite(BLUE_LED_PIN, LOW);
+
   Serial.begin(115200);
   Wire.begin(I2C_SDA, I2C_SCL);
  
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
+  esp_wifi_set_ps(WIFI_PS_NONE);
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
+    digitalWrite(RED_LED_PIN, HIGH);
     return;
   }
 
@@ -260,16 +221,31 @@ void setup() {
   // get the status of Trasnmitted packet
   esp_now_register_send_cb(OnDataSent);
   
-  // Register peer
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  // Register peer1
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);		//MowJoe_Master
+//  memcpy(peerInfo.peer_addr, broadcastAddress2, 6);		//MowJoe_MotorController
   peerInfo.channel = 1;  
   peerInfo.encrypt = false;
   
   // Add peer        
   if (esp_now_add_peer(&peerInfo) != ESP_OK){
-    Serial.println("Failed to add peer");
+    Serial.println("Failed to add peer1");
+    digitalWrite(RED_LED_PIN, HIGH);
     return;
   }
+
+  // Register peer2
+  memcpy(peerInfo.peer_addr, broadcastAddress2, 6);		//MowJoe_MotorController
+  peerInfo.channel = 1;
+  peerInfo.encrypt = false;
+
+  // Add peer
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer2");
+    digitalWrite(RED_LED_PIN, HIGH);
+    return;
+  }
+
   // Register for a callback function that will be called when data is received
   esp_now_register_recv_cb(OnDataRecv);
 
@@ -277,8 +253,10 @@ void setup() {
   if(!mag.begin()) {
     /* There was a problem detecting the HMC5883 ... check connections */
     Serial.println("No HMC5883 detected !");
+    digitalWrite(RED_LED_PIN, HIGH);
     while(1);  //Don't proceed until fixed!
   }
+  digitalWrite(BLUE_LED_PIN, HIGH);
   /* Display some basic information on this sensor */
   displaySensorDetails(MAG);
 
@@ -293,22 +271,6 @@ void setup() {
 void loop() {
 }
 
-void updateDisplay(){
-  // Display Readings in Serial Monitor
-//  Serial.printf("THIS UNIT[WIFI] channel %d, MAC: %s RSSI: %d, \n\r", WiFi.channel(),WiFi.macAddress().c_str(), WiFi.RSSI());
-  Serial.println("INCOMING READINGS");
-  Serial.print("Command: ");
-  Serial.println(incomingCommand);
-//  Serial.print("Heading: ");
-//  Serial.println(incomingReadings.temp);
-//  Serial.print("Heading: ");
-//  Serial.println(incomingReadings.hum);
-//  Serial.print("Heading: ");
-//  Serial.println(incomingReadings.pres);
-//  Serial.println();
-}
-
-
 
 void compass_task(void *arg) {
 //  EventBits_t uxBits;
@@ -320,6 +282,8 @@ void compass_task(void *arg) {
   while(1) {
 
           mag.getEvent(&event);
+          digitalWrite(RED_LED_PIN, LOW);
+          digitalWrite(GREEN_LED_PIN, LOW);
           // Calculate heading when the magnetometer is level, then correct for signs of axis.
           //yMax and xMax were were pre-determined/calculated via the '360 rotation techneque'.
               double heading = atan2((event.magnetic.y - ((yMax + yMin) / 2.0)), (event.magnetic.x - ((xMax + xMin) / 2.0)));
@@ -365,19 +329,45 @@ void compass_task(void *arg) {
               _position = nearbyint(temp_pos);  // Remove the decimal degrees (rounded out)
               Input = _position;//'Input comes out of the filter_heading() filter and goes to the PID
 
-            Serial.printf("Heading: %lf\n\r", Input);
+            Serial.printf("Magno: %lf\n\r", Input);
 
             // Send message via ESP-NOW
+            outgoingReadings.sensorID = MOWJOE_MAGNO;
             outgoingReadings.temp = headingDegrees;
             outgoingReadings.bearing = temp_pos;
             outgoingReadings.heading = Input;
 
-
-//            Serial.printf("outgoingReadings.pres: %lf\n\r", outgoingReadings.heading);
-
             if(ok_to_Send == true) {
-            	esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &outgoingReadings, sizeof(outgoingReadings));
+                digitalWrite(RED_LED_PIN, LOW);
+                digitalWrite(BLUE_LED_PIN, LOW);
+                digitalWrite(GREEN_LED_PIN, HIGH);
+
+            	esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &outgoingReadings, sizeof(outgoingReadings));		//Send to MowJoe_Master
+            	if (result == ESP_OK) {
+            	  Serial.println("Sent with success");
+            	}
+            	else {
+            	  Serial.println("Error sending the data");
+                  digitalWrite(RED_LED_PIN, HIGH);
+                  digitalWrite(BLUE_LED_PIN, LOW);
+                  digitalWrite(GREEN_LED_PIN, LOW);
+            	}
+
+/*
+            	esp_err_t result2 = esp_now_send(broadcastAddress2, (uint8_t *) &outgoingReadings, sizeof(outgoingReadings));	//Send to MowJoe_MotorControl
+            	if (result2 == ESP_OK) {
+            	  Serial.println("Sent with success");
+            	}
+            	else {
+            	  Serial.println("Error sending the data");
+            	}
+*/
+
             	Serial.printf("SENT -> outgoingReadings.heading: %lf\n\r", outgoingReadings.heading);
+            } else {
+                digitalWrite(RED_LED_PIN, LOW);
+                digitalWrite(BLUE_LED_PIN, HIGH);
+                digitalWrite(GREEN_LED_PIN, LOW);
             }
 
             ok_to_Send = start_sending;
